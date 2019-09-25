@@ -211,6 +211,9 @@ if __name__ == '__main__':
 
     log_dir = 'pt_lightning_logs'
 
+    if log_dir not in os.listdir():
+        os.mkdir(log_dir)
+
     exp = Experiment(
         name=os.path.join(log_dir, 'dcgan'),
         save_dir=os.getcwd(),
