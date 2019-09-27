@@ -1,16 +1,17 @@
 import math
 import os
+import time
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
+import torch.jit as jit
 import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from tqdm import tqdm
-
 
 class RNN_Classifier(nn.Module):
     def __init__(self, input_size, hidden_size=128, rnn_model='LSTM'):
@@ -51,29 +52,6 @@ class RNN_Classifier(nn.Module):
         batch_size = imgs.size(0)
         self._reset_hidden(batch_size)
 
-        # transforms imgs to sequence of pixels in format batch_size, seq_len (number of rows),
-        # input (pixels in row = 28)
-
-        # imgs = imgs.view(batch_size, -1, 28)
-
-        # for i in range(imgs.size(1)):
-        #     out, self.hidden = self.rnn(imgs[:, i, :].view(batch_size, 1, -1), self.hidden)
-
-        #     h, c = self.hidden
-
-        #     h = h.permute(1, 0, 2)
-        #     c = c.permute(1, 0, 2)
-
-        #     h = self.layer_norm_h(h)
-        #     c = self.layer_norm_c(c)
-
-        #     h = h.permute(1, 0, 2)
-        #     c = c.permute(1, 0, 2)
-
-        #     self.hidden = (h, c)
-
-        # transforms imgs to sequence of pixels in format batch_size, seq_len (number of pixels),
-        # input (pixel = 1)
         out = imgs.view(batch_size, -1, 1)
 
         # output is in the format output[batch_size, seq_len, hidden_size], (hidden, cell_state)
@@ -87,10 +65,58 @@ class RNN_Classifier(nn.Module):
         return out
 
 
+class RNN_Classifier2(nn.Module):
+    def __init__(self, input_size, hidden_size=128):
+        super().__init__()
+        self.rnn = nn.LSTMCell(input_size=input_size, hidden_size=hidden_size)
+
+        self.layer_norm_h = nn.LayerNorm([1, hidden_size])
+        self.layer_norm_c = nn.LayerNorm([1, hidden_size])
+
+        self.linear = nn.Linear(hidden_size, 10)
+
+        self.n_layers = 1
+        self.n_directions = 1
+        self.hidden_size = hidden_size
+
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    def _reset_hidden(self, batch_size):
+        self.hidden = (
+            torch.zeros(batch_size, self.hidden_size,
+                        dtype=torch.float, device=self.device),
+            torch.zeros(batch_size, self.hidden_size,
+                        dtype=torch.float, device=self.device),
+        )
+
+    def forward(self, imgs):
+        batch_size = imgs.size(0)
+        self._reset_hidden(batch_size)
+
+        imgs = imgs.view(batch_size, -1, 1)
+        imgs = imgs.permute(1, 0, 2)
+
+        for i in range(imgs.size(0)):
+            self.hidden = self.rnn(imgs[0].view(batch_size, -1), self.hidden)
+
+            # h, c = self.hidden
+
+            # h = self.layer_norm_h(h)
+            # c = self.layer_norm_c(c)
+
+            # self.hidden = (h, c)
+
+        out = self.hidden[0]
+        out = out.view(batch_size, -1)
+
+        out = self.linear(out)
+        return out
+
+
 class RNN(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.rnn = RNN_Classifier(input_size=1)
+        self.rnn = RNN_Classifier2(input_size=1)
 
     @staticmethod
     def compute_loss(y_hat, y):
@@ -149,7 +175,7 @@ class RNN(pl.LightningModule):
             transforms.Normalize([0.5], [0.5])
         ])
         mnist = MNIST('../mnist_dataset', train=True, download=True, transform=T)
-        return DataLoader(mnist, batch_size=128, shuffle=False)
+        return DataLoader(mnist, batch_size=512, shuffle=True)
 
     @pl.data_loader
     def val_dataloader(self):
@@ -175,7 +201,7 @@ if __name__ == '__main__':
         name=os.path.join(log_dir, 'simple_rnn'),
         save_dir=os.getcwd(),
         autosave=True,
-        version='simple_rnn',
+        version='simple_rnn2',
         debug=False,
     )
 
