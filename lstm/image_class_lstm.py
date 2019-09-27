@@ -53,30 +53,31 @@ class RNN_Classifier(nn.Module):
 
         # transforms imgs to sequence of pixels in format batch_size, seq_len (number of rows),
         # input (pixels in row = 28)
-        imgs = imgs.view(batch_size, -1, 28)
 
-        for i in range(imgs.size(1)):
-            out, self.hidden = self.rnn(imgs[:, i, :].view(batch_size, 1, -1), self.hidden)
+        # imgs = imgs.view(batch_size, -1, 28)
 
-            h, c = self.hidden
+        # for i in range(imgs.size(1)):
+        #     out, self.hidden = self.rnn(imgs[:, i, :].view(batch_size, 1, -1), self.hidden)
 
-            h = h.permute(1, 0, 2)
-            c = c.permute(1, 0, 2)
+        #     h, c = self.hidden
 
-            h = self.layer_norm_h(h)
-            c = self.layer_norm_c(c)
+        #     h = h.permute(1, 0, 2)
+        #     c = c.permute(1, 0, 2)
 
-            h = h.permute(1, 0, 2)
-            c = c.permute(1, 0, 2)
+        #     h = self.layer_norm_h(h)
+        #     c = self.layer_norm_c(c)
 
-            self.hidden = (h, c)
+        #     h = h.permute(1, 0, 2)
+        #     c = c.permute(1, 0, 2)
+
+        #     self.hidden = (h, c)
 
         # transforms imgs to sequence of pixels in format batch_size, seq_len (number of pixels),
         # input (pixel = 1)
-        # out = imgs.view(batch_size, -1, 1)
+        out = imgs.view(batch_size, -1, 1)
 
         # output is in the format output[batch_size, seq_len, hidden_size], (hidden, cell_state)
-        # out, self.hidden = self.rnn(out, self.hidden)
+        out, self.hidden = self.rnn(out, self.hidden)
         out = out[:, -1, :]
 
         # convert output to batch_size, hidden_size
@@ -89,7 +90,7 @@ class RNN_Classifier(nn.Module):
 class RNN(pl.LightningModule):
     def __init__(self):
         super().__init__()
-        self.rnn = RNN_Classifier(input_size=28)
+        self.rnn = RNN_Classifier(input_size=1)
 
     @staticmethod
     def compute_loss(y_hat, y):
@@ -191,7 +192,7 @@ if __name__ == '__main__':
         checkpoint_callback=checkpoint,
         gpus=1,
         train_percent_check=1.0,
-        test_percent_check=1.0,
+        test_percent_check=0.01,
     )
 
     model = RNN()
